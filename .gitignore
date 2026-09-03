@@ -1,0 +1,11 @@
+# Compiled binary. The build output sits at the repo root, so name it directly
+# rather than ignoring every extensionless file.
+/grosh
+/tescoctl
+
+# Go build and coverage artefacts.
+*.test
+*.out
+
+# macOS.
+.DS_Store
