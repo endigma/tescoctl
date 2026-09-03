@@ -10,7 +10,7 @@ import (
 )
 
 // ErrNoSession reports that nothing has been stored yet.
-var ErrNoSession = errors.New("no stored tesco session — run `grosh auth login`")
+var ErrNoSession = errors.New("no stored tesco session — run `tescoctl auth login`")
 
 // Store persists the session to disk. The file holds a bearer token, so it is
 // written 0600 inside a 0700 directory.
@@ -24,16 +24,51 @@ func DefaultDir() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("locating config directory: %w", err)
 	}
-	return filepath.Join(base, "grosh"), nil
+	return filepath.Join(base, "tescoctl"), nil
 }
 
-// NewStore returns a Store at the default location.
+// legacyDirName is what the config directory was called before the tool was
+// renamed. It holds a refresh token good for thirty days, so an existing
+// install is migrated rather than silently started from scratch.
+const legacyDirName = "grosh"
+
+// NewStore returns a Store at the default location, migrating a pre-rename
+// directory into place first.
 func NewStore() (*Store, error) {
 	dir, err := DefaultDir()
 	if err != nil {
 		return nil, err
 	}
+	if err := migrateLegacyDir(dir); err != nil {
+		return nil, err
+	}
 	return &Store{Path: filepath.Join(dir, "session.json")}, nil
+}
+
+// migrateLegacyDir moves the old config directory to dir when dir does not yet
+// exist. Both live under the same parent, so the rename is atomic: either the
+// whole directory moves or nothing does, and there is no window in which the
+// session exists in neither place.
+//
+// It is deliberately a no-op once dir exists. A user who has signed in since
+// the rename has a newer session than the legacy directory holds, and clobbering
+// it would log them out.
+func migrateLegacyDir(dir string) error {
+	if _, err := os.Stat(dir); err == nil {
+		return nil
+	} else if !errors.Is(err, fs.ErrNotExist) {
+		return fmt.Errorf("checking config directory: %w", err)
+	}
+
+	legacy := filepath.Join(filepath.Dir(dir), legacyDirName)
+	if _, err := os.Stat(legacy); err != nil {
+		// Nothing to migrate: a fresh install, which is not an error.
+		return nil
+	}
+	if err := os.Rename(legacy, dir); err != nil {
+		return fmt.Errorf("migrating %s to %s: %w", legacy, dir, err)
+	}
+	return nil
 }
 
 // Load reads the stored session, returning ErrNoSession when there is none.
@@ -48,7 +83,7 @@ func (s *Store) Load() (*Session, error) {
 
 	var session Session
 	if err := json.Unmarshal(data, &session); err != nil {
-		return nil, fmt.Errorf("stored session at %s is corrupt (%w) — run `grosh auth login`", s.Path, err)
+		return nil, fmt.Errorf("stored session at %s is corrupt (%w) — run `tescoctl auth login`", s.Path, err)
 	}
 	return &session, nil
 }

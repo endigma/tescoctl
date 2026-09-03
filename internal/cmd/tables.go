@@ -64,7 +64,7 @@ func notes(r *render.Renderer, p view.Product) string {
 }
 
 // categoryTree renders the taxonomy as an indented list. Facets are shown
-// because they are what `grosh browse` takes.
+// because they are what `tescoctl browse` takes.
 func categoryTree(r *render.Renderer, cats []view.Category) string {
 	var b strings.Builder
 	for _, c := range cats {
@@ -209,7 +209,7 @@ func pad(s string, n int) string {
 }
 
 // basketTable renders the trolley plus its total and the checkout link, since
-// grosh deliberately cannot pay.
+// tescoctl deliberately cannot pay.
 func basketTable(r *render.Renderer, b view.Basket) string {
 	if len(b.Items) == 0 {
 		return r.Styles.Muted.Render("Basket is empty.")
@@ -397,7 +397,7 @@ func formatStamp(s string) string {
 	return when.Local().Format("Mon 2 Jan 2006, 15:04")
 }
 
-// basketCheckReport renders the result of `grosh basket check`. A sound basket
+// basketCheckReport renders the result of `tescoctl basket check`. A sound basket
 // gets one line; problems get one paragraph each, since each carries the tpnc
 // and the command needed to act on it.
 func basketCheckReport(r *render.Renderer, c view.BasketCheck) string {

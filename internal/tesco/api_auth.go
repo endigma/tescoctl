@@ -196,7 +196,7 @@ func (b *Basket) line(tpnc string) *BasketItem {
 // confirmQuantity checks the basket a write returned against what the write
 // asked for. Tesco accepts the UpdateBasket mutation for some products, returns
 // no GraphQL error, and simply does not apply it — so without this check the
-// write is lost while grosh reports success and exits 0.
+// write is lost while tescoctl reports success and exits 0.
 func confirmQuantity(b *Basket, tpnc string, want float64) error {
 	line := b.line(tpnc)
 	fail := &BasketNotUpdatedError{TPNC: tpnc, Want: want, Present: line != nil}

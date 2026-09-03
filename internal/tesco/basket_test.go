@@ -385,7 +385,7 @@ func TestListingCarriesTotal(t *testing.T) {
 }
 
 // TestProductURL pins the tesco.com link, which is where a user is sent for
-// everything grosh cannot do.
+// everything tescoctl cannot do.
 func TestProductURL(t *testing.T) {
 	if got := ProductURL("259541778"); got != "https://www.tesco.com/groceries/en-GB/products/259541778" {
 		t.Errorf("ProductURL() = %q", got)

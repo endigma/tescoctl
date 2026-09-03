@@ -140,7 +140,7 @@ func (p Product) DefaultWeight() (float64, bool) {
 // HasWeight reports whether w is one of the selectable weights. Tesco rejects
 // nothing here: an unlisted weight is accepted by the gateway and written to the
 // basket, where it renders as an invalid line that breaks tesco.com's basket
-// page — so this check is grosh's job, not the API's.
+// page — so this check is tescoctl's job, not the API's.
 func (p Product) HasWeight(w float64) bool {
 	for _, cw := range p.CatchWeightList {
 		if cw.Weight == w {
@@ -160,7 +160,7 @@ func (p Product) Empty() bool { return p.TPNC == "" && p.Title == "" }
 // only way to know a listing was truncated: the products themselves cannot say.
 //
 // The gateway returns more nodes than asked for, so Count is Tesco's own idea of
-// the page size and is not the number of products grosh emits.
+// the page size and is not the number of products tescoctl emits.
 type ListInfo struct {
 	Total  int `json:"total"`
 	Count  int `json:"count"`
@@ -223,7 +223,7 @@ type DeliverySlot struct {
 	Status string   `json:"status"`
 
 	// Group is a number, not a string. It was declared as a string and broke
-	// every `grosh slots` call at the decoding step — the query was fine, so
+	// every `tescoctl slots` call at the decoding step — the query was fine, so
 	// the live suite, which validates that fields exist, could not see it.
 	Group        int        `json:"group"`
 	Price        *SlotPrice `json:"price"`

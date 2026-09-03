@@ -9,14 +9,14 @@ import (
 
 // APIKeyError reports that Tesco rejected the x-apikey. The public key is baked
 // into Tesco's web bundles and rotates roughly monthly, so the fix is to lift a
-// fresh one and pass it via --api-key or GROSH_API_KEY.
+// fresh one and pass it via --api-key or TESCO_API_KEY.
 type APIKeyError struct {
 	Op string
 }
 
 func (e *APIKeyError) Error() string {
 	return fmt.Sprintf("tesco rejected the API key on %s (403 invalid client) — it has most likely rotated; "+
-		"lift a fresh key from tesco.com and pass --api-key or set GROSH_API_KEY", e.Op)
+		"lift a fresh key from tesco.com and pass --api-key or set TESCO_API_KEY", e.Op)
 }
 
 // AuthExpiredError reports that an operation needed a session and did not have a
@@ -26,7 +26,7 @@ type AuthExpiredError struct {
 }
 
 func (e *AuthExpiredError) Error() string {
-	return fmt.Sprintf("tesco session expired or missing (%s returned 401) — run `grosh auth login`", e.Op)
+	return fmt.Sprintf("tesco session expired or missing (%s returned 401) — run `tescoctl auth login`", e.Op)
 }
 
 // RateLimitedError reports a 429, or a 403 that is not an API-key rejection.
@@ -104,7 +104,7 @@ type FractionalQuantityError struct {
 }
 
 func (e *FractionalQuantityError) Error() string {
-	return fmt.Sprintf("quantity %s for %s is not a whole number, and grosh writes basket lines in %q — "+
+	return fmt.Sprintf("quantity %s for %s is not a whole number, and tescoctl writes basket lines in %q — "+
 		"tesco accepts such a line but then cannot render the basket page at all, so this write is refused",
 		formatQuantity(e.Quantity), e.TPNC, e.Unit)
 }
@@ -153,7 +153,7 @@ func formatQuantity(q float64) string {
 	return strconv.FormatFloat(q, 'f', -1, 64)
 }
 
-// CatchweightError reports a product grosh cannot add: one sold by variable
+// CatchweightError reports a product tescoctl cannot add: one sold by variable
 // weight rather than by the piece.
 //
 // Every basket write goes out as whole pieces, and a catchweight line cannot be

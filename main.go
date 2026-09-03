@@ -18,7 +18,7 @@ func main() {
 		// Command bodies render their own errors; anything reaching here is a
 		// usage or parse failure that urfave has not already printed.
 		if msg := err.Error(); msg != "" {
-			fmt.Fprintln(os.Stderr, "grosh:", msg)
+			fmt.Fprintln(os.Stderr, "tescoctl:", msg)
 		}
 		os.Exit(1)
 	}

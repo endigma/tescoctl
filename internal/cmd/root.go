@@ -32,10 +32,10 @@ type app struct {
 // --json and friends are available on every subcommand without re-declaring.
 func New() *cli.Command {
 	return &cli.Command{
-		Name:    "grosh",
+		Name:    "tescoctl",
 		Usage:   "A CLI for Tesco groceries",
 		Version: version,
-		Description: "grosh talks to Tesco's internal GraphQL gateway. It is not an\n" +
+		Description: "tescoctl talks to Tesco's internal GraphQL gateway. It is not an\n" +
 			"official or supported API: operations can change without notice.",
 		Flags: []cli.Flag{
 			&cli.BoolFlag{
@@ -45,7 +45,7 @@ func New() *cli.Command {
 			&cli.StringFlag{
 				Name:    "api-key",
 				Usage:   "override the public Tesco API key (it rotates)",
-				Sources: cli.EnvVars("GROSH_API_KEY"),
+				Sources: cli.EnvVars("TESCO_API_KEY"),
 				Value:   tesco.DefaultAPIKey,
 			},
 			&cli.DurationFlag{
@@ -97,6 +97,7 @@ func newApp(cmd *cli.Command) (*app, error) {
 		Throttle: cmd.Duration("throttle"),
 		HTTP:     &http.Client{Timeout: cmd.Duration("timeout")},
 		Auth:     a.credentials,
+		Refresh:  a.refresh,
 	})
 	return a, nil
 }
@@ -114,18 +115,57 @@ func (a *app) credentials() *tesco.Auth {
 	}
 }
 
-// requireAuth fails early when a command needs a session and the stored one is
-// missing or stale, so the user gets a clear instruction instead of a 401.
+// requireAuth fails early when a command needs a session and there is none, so
+// the user gets a clear instruction instead of a 401.
 //
-// There is no silent refresh: renewing a Tesco session means a human signing in
-// to a browser, so a stale session is terminal for the current command.
-func (a *app) requireAuth() error {
+// An expired access token is not a failure. The stored jar carries a refresh
+// token good for thirty days, so a stale session is renewed here rather than
+// sent back to a browser; only a spent refresh token needs a human.
+func (a *app) requireAuth(ctx context.Context) error {
 	if a.session == nil {
 		return auth.ErrNoSession
 	}
-	if a.session.Expired(time.Minute) {
-		return fmt.Errorf("stored tesco session expired at %s — run `grosh auth login`",
+	if !a.session.Expired(time.Minute) {
+		return nil
+	}
+	if !a.session.Renewable() {
+		return fmt.Errorf("stored tesco session expired at %s and cannot be renewed — run `tescoctl auth login`",
 			a.session.ExpiresAt.Local().Format(time.RFC1123))
+	}
+	return a.renew(ctx)
+}
+
+// refresh is the hook the client calls after a 401. It reports whether the
+// call is worth retrying; a spent refresh token is not an error here, because
+// the client renders its own "run auth login" message for that case.
+func (a *app) refresh(ctx context.Context) (bool, error) {
+	if a.session == nil || !a.session.Renewable() {
+		return false, nil
+	}
+	if err := a.renew(ctx); err != nil {
+		if errors.Is(err, auth.ErrLoginRequired) {
+			return false, nil
+		}
+		return false, err
+	}
+	return true, nil
+}
+
+// renew redeems the refresh token and persists the result.
+//
+// Persisting is not optional. Tesco rotates the refresh token alongside the
+// access token, so the copy on disk is dead the moment this call succeeds — a
+// renewal that is not written out has burned the credential the next one needs,
+// which is why a failed save is reported as a lost session rather than swallowed.
+func (a *app) renew(ctx context.Context) error {
+	renewed, err := (&auth.Refresher{Session: a.session}).Harvest(ctx)
+	if err != nil {
+		return err
+	}
+	a.session = renewed
+	if err := a.store.Save(renewed); err != nil {
+		return fmt.Errorf("renewed the tesco session but could not save it to %s (%w) — "+
+			"the previous one is no longer valid, so run `tescoctl auth login`", a.store.Path, err)
 	}
 	return nil
 }
@@ -142,7 +182,7 @@ func action(fn func(context.Context, *cli.Command, *app) error) cli.ActionFunc {
 		a, err := newApp(cmd)
 		if err != nil {
 			// No renderer yet, so report plainly and bail.
-			fmt.Fprintln(os.Stderr, "grosh:", err)
+			fmt.Fprintln(os.Stderr, "tescoctl:", err)
 			return cli.Exit("", 1)
 		}
 		if err := fn(ctx, cmd, a); err != nil {

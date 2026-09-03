@@ -28,7 +28,7 @@ const pollInterval = time.Second
 // The profile persists between runs, so subsequent logins usually skip the OTP.
 type Browser struct {
 	// ProfileDir holds the persistent Chrome profile. Empty uses the default
-	// under the grosh config directory.
+	// under the tescoctl config directory.
 	ProfileDir string
 
 	// ExecPath overrides the browser binary. Empty auto-detects via
@@ -84,10 +84,10 @@ func (b *Browser) Harvest(ctx context.Context) (*Session, error) {
 
 	if err := chromedp.Run(browserCtx, chromedp.Navigate(LoginURL)); err != nil {
 		return nil, fmt.Errorf("could not start a browser: %w\n\n"+
-			"grosh looks for Google Chrome. If you have a different Chromium browser, "+
+			"tescoctl looks for Google Chrome. If you have a different Chromium browser, "+
 			"point at it with --chrome (note that some forks, Arc among them, refuse "+
 			"remote control and will not work).\n"+
-			"Otherwise export your cookies and use `grosh auth import` — see the README.", err)
+			"Otherwise export your cookies and use `tescoctl auth import` — see the README.", err)
 	}
 
 	b.report(browserName(execPath) + " is open — sign in to Tesco. This will finish on its own.")
@@ -127,8 +127,8 @@ func (b *Browser) poll(ctx context.Context) (*Session, error) {
 
 func loginTimeout(err error) error {
 	if errors.Is(err, context.DeadlineExceeded) {
-		return errors.New("timed out waiting for sign-in — run `grosh auth login` again, " +
-			"or export cookies and use `grosh auth import`")
+		return errors.New("timed out waiting for sign-in — run `tescoctl auth login` again, " +
+			"or export cookies and use `tescoctl auth import`")
 	}
 	return fmt.Errorf("sign-in interrupted: %w", err)
 }

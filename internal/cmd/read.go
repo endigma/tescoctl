@@ -37,7 +37,7 @@ func searchCmd() *cli.Command {
 		Action: action(func(ctx context.Context, cmd *cli.Command, a *app) error {
 			query := strings.TrimSpace(strings.Join(cmd.Args().Slice(), " "))
 			if query == "" {
-				return errors.New("a search query is required, e.g. `grosh search oat milk`")
+				return errors.New("a search query is required, e.g. `tescoctl search oat milk`")
 			}
 			listing, err := a.c.Search(ctx, query, cmd.Int("page"), cmd.Int("limit"))
 			if err != nil {
@@ -56,7 +56,7 @@ func productCmd() *cli.Command {
 		Action: action(func(ctx context.Context, cmd *cli.Command, a *app) error {
 			tpnc := strings.TrimSpace(cmd.Args().First())
 			if tpnc == "" {
-				return errors.New("a TPNC is required — find one with `grosh search`")
+				return errors.New("a TPNC is required — find one with `tescoctl search`")
 			}
 			p, err := a.c.Product(ctx, tpnc)
 			if err != nil {
@@ -93,7 +93,7 @@ func browseCmd() *cli.Command {
 		Action: action(func(ctx context.Context, cmd *cli.Command, a *app) error {
 			arg := strings.TrimSpace(strings.Join(cmd.Args().Slice(), " "))
 			if arg == "" {
-				return errors.New("a category is required — list them with `grosh categories`")
+				return errors.New("a category is required — list them with `tescoctl categories`")
 			}
 
 			facet, err := resolveFacet(ctx, a, arg)

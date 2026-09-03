@@ -4,7 +4,7 @@
 |---|-----|--------|
 | 1 | `basket add` silently no-ops on catchweight products | fixed |
 | 2 | a fractional `--qty` writes a line that breaks tesco.com | fixed |
-| 3 | `grosh slots` fails to decode `delivery.group` | fixed |
+| 3 | `tescoctl slots` fails to decode `delivery.group` | fixed |
 
 These are kept as the record of what went wrong. 1 and 2 are silent failures
 that would be easy to reintroduce, because Tesco reports each of them as a
@@ -19,26 +19,26 @@ Fixed in `internal/tesco` (`SetQuantity`, `SetWeight`, `write`, `Catchweight`,
 **Severity:** high — the write is lost, exit code is 0, and nothing is printed
 to say so.
 
-`grosh basket add <tpnc>` reports success whenever the `UpdateBasket` mutation
+`tescoctl basket add <tpnc>` reports success whenever the `UpdateBasket` mutation
 returns without a GraphQL error. It never checks that the requested line is
 actually present in the basket that comes back. For at least one product the
 gateway accepts the mutation, returns no error, and simply does not add the
-item — so `grosh` prints the (unchanged) basket and exits 0.
+item — so `tescoctl` prints the (unchanged) basket and exits 0.
 
 ### Reproduction
 
 `259541778` (Tesco Large Pork Shoulder Joint) reproduces it every time:
 
 ```console
-$ ./grosh basket --json | jq '.items|length'
+$ ./tescoctl basket --json | jq '.items|length'
 32
-$ ./grosh basket add 259541778 --qty 1     # also tried --qty 2, --qty 1.5
+$ ./tescoctl basket add 259541778 --qty 1     # also tried --qty 2, --qty 1.5
 ┌───────────────────────────────────────────────────────────────┐
 │ ... basket printed, no mention of 259541778, no error ...      │
 └───────────────────────────────────────────────────────────────┘
 $ echo $?
 0
-$ ./grosh basket --json | jq '.items|length'
+$ ./tescoctl basket --json | jq '.items|length'
 32                                          # nothing was added
 ```
 
@@ -57,13 +57,13 @@ identifiable by `price == unitPrice` with `unitOfMeasure: "kg"`:
 The first two silently no-op. The third — a fixed-weight 700g pack, where
 `price != unitPrice` — adds normally.
 
-The gateway exposes the selectable weights, on a field `grosh` does not
+The gateway exposes the selectable weights, on a field `tescoctl` does not
 currently request. `ProductInterface` has **`catchWeightList: [CatchWeightInterface]`**,
 whose members are `{ price, weight, default }`:
 
 ```console
 $ # productQuery extended with: catchWeightList { price weight default }
-$ grosh product 259541778   # raw response
+$ tescoctl product 259541778   # raw response
 "catchWeightList": [
   { "price": 9,     "weight": 1.8,  "default": true  },
   { "price": 9.75,  "weight": 1.95, "default": false },
@@ -90,7 +90,7 @@ corrupted the basket.
 Suggested shape:
 
 - Request `catchWeightList { price weight default }` in `productQuery`.
-- Expose it in `grosh product` output, so a user can see the choices.
+- Expose it in `tescoctl product` output, so a user can see the choices.
 - On `basket add`, look up the product; if `catchWeightList` is non-empty,
   require the requested value to match one of the listed weights (defaulting to
   the `default: true` entry when `--qty` is not given) and send it with
@@ -126,7 +126,7 @@ path in `internal/cmd/shop.go`.
 ## 2. A fractional `--qty` writes a basket line that breaks tesco.com
 
 **Severity:** high — corrupts the whole basket, not just the offending line,
-and the damage is invisible from `grosh` itself.
+and the damage is invisible from `tescoctl` itself.
 
 `basket add --qty` is a `float`. Its value goes straight into the mutation as
 `newValue`, alongside the hardcoded `newUnitChoice: "pcs"` at
@@ -135,7 +135,7 @@ and the damage is invisible from `grosh` itself.
 Tesco accepts the write. The GraphQL basket read returns the line happily:
 
 ```console
-$ ./grosh basket --json | jq '.items[]|select(.tpnc=="259541778")'
+$ ./tescoctl basket --json | jq '.items[]|select(.tpnc=="259541778")'
 {
   "tpnc": "259541778",
   "title": "Tesco Large Pork Shoulder Joint",
@@ -151,12 +151,12 @@ fine, but the page never loads, so the order cannot be reviewed or checked out.
 
 ### Why this is worse than it looks
 
-- `grosh` gives no hint anything is wrong: `basket` prints the line, the guide
+- `tescoctl` gives no hint anything is wrong: `basket` prints the line, the guide
   total is correct, exit code is 0.
 - The website gives no hint either — no indication of *which* line is at fault.
 - The user cannot fix it in the browser, because the page that would let them
   remove the line is the page that will not load.
-- The only route back is `grosh basket rm <tpnc>`, which requires already
+- The only route back is `tescoctl basket rm <tpnc>`, which requires already
   knowing which tpnc is to blame.
 
 Verified: the error appeared after that line was written and cleared the moment
@@ -176,7 +176,7 @@ every write, and nothing in the CLI can select another unit, the practical guard
 today is to reject fractional `--qty` outright. If per-unit writes are added
 later, gate the check on the unit being sent rather than removing it.
 
-A defensive follow-up: have `grosh basket` warn when it *reads* a line with a
+A defensive follow-up: have `tescoctl basket` warn when it *reads* a line with a
 fractional quantity on a `pcs` unit, naming the tpnc. That turns an
 unexplained website outage into a one-line diagnosis, and would have caught this
 immediately.
@@ -199,7 +199,7 @@ likewise. The signal is a non-empty `catchWeightList`.
 
 ---
 
-## 3. `grosh slots` is broken by schema drift on `delivery.group`
+## 3. `tescoctl slots` is broken by schema drift on `delivery.group`
 
 **Severity:** medium — the command is unusable, but nothing is corrupted and
 the fix is one line.
@@ -207,7 +207,7 @@ the fix is one line.
 Every invocation fails during decoding:
 
 ```console
-$ grosh slots
+$ tescoctl slots
 error: decoding tesco DeliverySlots response: json: cannot unmarshal number into
 Go struct field .delivery.0.group of type string
 $ echo $?
@@ -220,7 +220,7 @@ live response cleanly and every slot comes back.
 
 ```console
 $ # with Group retyped to int
-$ grosh slots --json | jq '.[0]'
+$ tescoctl slots --json | jq '.[0]'
 {
   "id": "REVMSVZFUllfVkFOIzI5OTQ...",
   "start": "2026-09-03T12:00:00Z",

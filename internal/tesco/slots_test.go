@@ -10,7 +10,7 @@ import (
 
 // TestSlotsDecodeNumericGroup is the regression guard for a bug the live suite
 // could not catch. `delivery.group` is a number; it was declared as a string,
-// and every `grosh slots` call died at the decoding step.
+// and every `tescoctl slots` call died at the decoding step.
 //
 // The live tests validate that a field exists on a type, which `group` always
 // did — the drift was in the Go type, not the query. Only decoding a real

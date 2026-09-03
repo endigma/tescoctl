@@ -102,6 +102,12 @@ type Session struct {
 	ExpiresAt    string `json:"expiresAt,omitempty"`
 	Expired      bool   `json:"expired"`
 	Cookies      int    `json:"cookies"`
+
+	// Renewable reports whether the session can be renewed without a human,
+	// and RenewableUntil is when that stops being true. An expired session
+	// that is still renewable needs no action.
+	Renewable      bool   `json:"renewable"`
+	RenewableUntil string `json:"renewableUntil,omitempty"`
 }
 
 // Basket is the current trolley. GuidePrice is Tesco's estimate — weighted

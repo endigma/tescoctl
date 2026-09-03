@@ -23,7 +23,7 @@ func basketCmd() *cli.Command {
 			basketCheckCmd(),
 		},
 		Action: action(func(ctx context.Context, cmd *cli.Command, a *app) error {
-			if err := a.requireAuth(); err != nil {
+			if err := a.requireAuth(ctx); err != nil {
 				return err
 			}
 			basket, err := a.c.Basket(ctx)
@@ -36,16 +36,16 @@ func basketCmd() *cli.Command {
 }
 
 // basketCheckCmd verifies a basket line by line, which needs a product lookup
-// each and so is a command rather than something every `grosh basket` pays for.
+// each and so is a command rather than something every `tescoctl basket` pays for.
 func basketCheckCmd() *cli.Command {
 	return &cli.Command{
 		Name:  "check",
 		Usage: "Verify every line in the trolley against the catalogue",
 		Description: "Looks up each line to find items Tesco no longer sells, and lines\n" +
 			"tesco.com cannot display. Costs one request per line, so it is not run\n" +
-			"by `grosh basket`. Exits non-zero when it finds something.",
+			"by `tescoctl basket`. Exits non-zero when it finds something.",
 		Action: action(func(ctx context.Context, cmd *cli.Command, a *app) error {
-			if err := a.requireAuth(); err != nil {
+			if err := a.requireAuth(ctx); err != nil {
 				return err
 			}
 			basket, err := a.c.Basket(ctx)
@@ -76,7 +76,7 @@ func (a *app) checkBasket(ctx context.Context, basket *tesco.Basket) error {
 			report.Problems = append(report.Problems, view.BasketProblem{
 				TPNC: item.TPNC, Title: item.Title, Kind: view.ProblemUnavailable,
 				Detail: "no longer for sale — it will not be delivered; remove it with " +
-					"`grosh basket rm " + item.TPNC + "`",
+					"`tescoctl basket rm " + item.TPNC + "`",
 			})
 		}
 		// A fractional line is either a legitimate catchweight or the corruption
@@ -88,7 +88,7 @@ func (a *app) checkBasket(ctx context.Context, basket *tesco.Basket) error {
 				TPNC: item.TPNC, Title: item.Title, Kind: view.ProblemUnrenderable,
 				Detail: "is at " + quantity(item.Quantity, "") + " " + item.Unit +
 					", which tesco.com cannot display — the whole basket page fails while " +
-					"this line is there; remove it with `grosh basket rm " + item.TPNC + "`",
+					"this line is there; remove it with `tescoctl basket rm " + item.TPNC + "`",
 			})
 		}
 	}
@@ -117,7 +117,7 @@ func basketAddCmd() *cli.Command {
 			&cli.FloatFlag{
 				Name:    "weight",
 				Aliases: []string{"w"},
-				Usage:   "`kg` for a product sold by weight — see grosh product for the weights on offer",
+				Usage:   "`kg` for a product sold by weight — see tescoctl product for the weights on offer",
 			},
 		},
 		Action: action(func(ctx context.Context, cmd *cli.Command, a *app) error {
@@ -149,12 +149,12 @@ func basketRemoveCmd() *cli.Command {
 func (a *app) setWeight(ctx context.Context, tpnc string, weight float64) error {
 	tpnc = strings.TrimSpace(tpnc)
 	if tpnc == "" {
-		return errors.New("a TPNC is required — find one with `grosh search`")
+		return errors.New("a TPNC is required — find one with `tescoctl search`")
 	}
 	if weight <= 0 {
-		return errors.New("--weight must be positive; remove a line with `grosh basket rm`")
+		return errors.New("--weight must be positive; remove a line with `tescoctl basket rm`")
 	}
-	if err := a.requireAuth(); err != nil {
+	if err := a.requireAuth(ctx); err != nil {
 		return err
 	}
 	basket, err := a.c.SetWeight(ctx, tpnc, weight, "")
@@ -169,9 +169,9 @@ func (a *app) setWeight(ctx context.Context, tpnc string, weight float64) error 
 func (a *app) setQuantity(ctx context.Context, tpnc string, qty float64) error {
 	tpnc = strings.TrimSpace(tpnc)
 	if tpnc == "" {
-		return errors.New("a TPNC is required — find one with `grosh search`")
+		return errors.New("a TPNC is required — find one with `tescoctl search`")
 	}
-	if err := a.requireAuth(); err != nil {
+	if err := a.requireAuth(ctx); err != nil {
 		return err
 	}
 	basket, err := a.c.SetQuantity(ctx, tpnc, qty, "")
@@ -203,7 +203,7 @@ func (a *app) emitBasket(ctx context.Context, basket *tesco.Basket) error {
 			continue
 		}
 		a.r.Note("warning: %s (%s) is in the basket at %s %s — tesco.com cannot display the basket "+
-			"while this line is there; remove it with `grosh basket rm %s`",
+			"while this line is there; remove it with `tescoctl basket rm %s`",
 			item.TPNC, item.Title, quantity(item.Quantity, ""), item.Unit, item.TPNC)
 	}
 	return nil
@@ -227,7 +227,7 @@ func favouritesCmd() *cli.Command {
 		Usage:   "List your usual items",
 		Flags:   pageFlags(30),
 		Action: action(func(ctx context.Context, cmd *cli.Command, a *app) error {
-			if err := a.requireAuth(); err != nil {
+			if err := a.requireAuth(ctx); err != nil {
 				return err
 			}
 			listing, err := a.c.Favourites(ctx, cmd.Int("page"), cmd.Int("limit"))
@@ -248,7 +248,7 @@ func ordersCmd() *cli.Command {
 			Usage: "list upcoming orders instead of past ones",
 		}),
 		Action: action(func(ctx context.Context, cmd *cli.Command, a *app) error {
-			if err := a.requireAuth(); err != nil {
+			if err := a.requireAuth(ctx); err != nil {
 				return err
 			}
 			contexts := tesco.PreviousOrders
@@ -273,9 +273,9 @@ func orderCmd() *cli.Command {
 		Action: action(func(ctx context.Context, cmd *cli.Command, a *app) error {
 			id := strings.TrimSpace(cmd.Args().First())
 			if id == "" {
-				return errors.New("an order id is required — list them with `grosh orders`")
+				return errors.New("an order id is required — list them with `tescoctl orders`")
 			}
-			if err := a.requireAuth(); err != nil {
+			if err := a.requireAuth(ctx); err != nil {
 				return err
 			}
 			order, err := a.c.Order(ctx, id)
@@ -322,7 +322,7 @@ func slotsCmd() *cli.Command {
 				return errors.New("--to must be after --from")
 			}
 
-			if err := a.requireAuth(); err != nil {
+			if err := a.requireAuth(ctx); err != nil {
 				return err
 			}
 

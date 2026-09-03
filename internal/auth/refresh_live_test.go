@@ -9,7 +9,7 @@
 // for 30 days) alongside the 60-minute OAuth.AccessToken. basketeer asserts a
 // pure-HTTP refresh is rejected by Akamai and drives a headed Chrome instead —
 // but it never replayed the _abck/bm_* cookies that Akamai actually checks,
-// which grosh does keep. This test settles which is true.
+// which tescoctl does keep. This test settles which is true.
 //
 // It does not write to the store. A rotated token is reported, not saved, so a
 // failed probe cannot strand the real session.
@@ -18,7 +18,6 @@ package auth
 import (
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
@@ -35,33 +34,6 @@ func fingerprint(v string) string {
 	sum := sha256.Sum256([]byte(v))
 	return hex.EncodeToString(sum[:])[:8]
 }
-
-// tokenWindows decodes OAuth.TokensExpiryTime, the cookie in which Tesco states
-// when each token dies. Reading it is how we learn whether the refresh token's
-// 30-day window is rolling or fixed.
-func tokenWindows(raw string) map[string]time.Time {
-	decoded, err := url.QueryUnescape(raw)
-	if err != nil {
-		return nil
-	}
-	var ms map[string]int64
-	if err := json.Unmarshal([]byte(decoded), &ms); err != nil {
-		return nil
-	}
-	out := make(map[string]time.Time, len(ms))
-	for k, v := range ms {
-		out[k] = time.UnixMilli(v)
-	}
-	return out
-}
-
-// refreshURL forces a rotation even while the current token is live
-// (soft-refresh=false), then redirects to `from` once the new token is written.
-const refreshURL = "https://www.tesco.com/account/auth/en-GB/refresh-token?soft-refresh=false" +
-	"&from=https%3A%2F%2Fwww.tesco.com%2Fshop%2Fen-GB%2Flanding%2Fgroceries"
-
-const probeUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) " +
-	"AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36"
 
 func TestLiveHTTPRefresh(t *testing.T) {
 	store, err := NewStore()
@@ -92,7 +64,7 @@ func TestLiveHTTPRefresh(t *testing.T) {
 		t.Logf("  window %s: %s (in %s)", name, when.Format(time.RFC3339), time.Until(when).Round(time.Minute))
 	}
 
-	// Seed a jar with every cookie grosh keeps, including the Akamai set.
+	// Seed a jar with every cookie tescoctl keeps, including the Akamai set.
 	jar, err := cookiejar.New(nil)
 	if err != nil {
 		t.Fatalf("building jar: %v", err)
@@ -120,11 +92,11 @@ func TestLiveHTTPRefresh(t *testing.T) {
 		},
 	}
 
-	req, err := http.NewRequest(http.MethodGet, refreshURL, nil)
+	req, err := http.NewRequest(http.MethodGet, RefreshURL, nil)
 	if err != nil {
 		t.Fatalf("building request: %v", err)
 	}
-	req.Header.Set("user-agent", probeUserAgent)
+	req.Header.Set("user-agent", defaultRefreshUA)
 	req.Header.Set("accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
 	req.Header.Set("accept-language", "en-GB,en;q=0.9")
 	req.Header.Set("upgrade-insecure-requests", "1")
@@ -146,7 +118,7 @@ func TestLiveHTTPRefresh(t *testing.T) {
 		t.Logf("  redirect %d: %s", i+1, hop)
 	}
 
-	// Read the jar back. Every cookie is collected, not just the ones grosh
+	// Read the jar back. Every cookie is collected, not just the ones tescoctl
 	// currently keeps: a refresh may mint cookies Keep() would discard, and
 	// discarding one the next refresh needs is how this design strands itself.
 	jarNow := make(map[string]string)
@@ -184,7 +156,7 @@ func TestLiveHTTPRefresh(t *testing.T) {
 	case refreshAfter == "":
 		t.Errorf("ROTATES: the refresh token is GONE from the jar — persisting is mandatory")
 	case refreshAfter != refreshBefore:
-		t.Logf("ROTATES: refresh token changed — grosh MUST save the whole jar after every refresh")
+		t.Logf("ROTATES: refresh token changed — tescoctl MUST save the whole jar after every refresh")
 	default:
 		t.Logf("STABLE: refresh token unchanged — the stored one stays redeemable")
 	}
@@ -193,7 +165,7 @@ func TestLiveHTTPRefresh(t *testing.T) {
 	}
 
 	// Rolling or fixed? A window that slid forward means renewal is indefinite
-	// so long as grosh refreshes at least once every 30 days.
+	// so long as tescoctl refreshes at least once every 30 days.
 	windows := tokenWindows(jarNow["OAuth.TokensExpiryTime"])
 	oldWindows := tokenWindows(session.Cookies["OAuth.TokensExpiryTime"])
 	for name, when := range windows {
@@ -208,8 +180,8 @@ func TestLiveHTTPRefresh(t *testing.T) {
 	// Persist only on request. The probe defaults to read-only so a failed run
 	// cannot damage the real session; with rotation confirmed, saving is how
 	// the burned credential gets replaced by the live one.
-	if os.Getenv("GROSH_PROBE_SAVE") != "1" {
-		t.Logf("NOT SAVED (set GROSH_PROBE_SAVE=1 to persist the rotated session)")
+	if os.Getenv("TESCO_PROBE_SAVE") != "1" {
+		t.Logf("NOT SAVED (set TESCO_PROBE_SAVE=1 to persist the rotated session)")
 		return
 	}
 	renewed, err := FromCookies(rawFrom(jarNow))

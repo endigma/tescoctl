@@ -1,8 +1,9 @@
 // Package auth handles the Tesco session: harvesting it from a signed-in
 // browser, persisting it, and turning it into request credentials.
 //
-// The whole session is cookies. Tesco has no token-exchange endpoint, so
-// "refreshing" means going back to a browser.
+// The whole session is cookies. The access token lasts an hour, but the jar
+// also carries a refresh token good for thirty days, which refresh.go redeems
+// over plain HTTP — so a human is needed roughly monthly, not hourly.
 package auth
 
 import (
@@ -10,6 +11,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	"net/url"
 	"slices"
 	"strings"
 	"time"
@@ -24,9 +26,15 @@ var (
 
 // accessTokenCookie holds the bearer token; customerCookie identifies the
 // account. Both must be present for a session to be usable.
+//
+// refreshTokenCookie redeems a new access token without a human (see
+// refresh.go), and tokensExpiryCookie is Tesco's own statement of when each of
+// the two dies.
 const (
-	accessTokenCookie = "OAuth.AccessToken"
-	customerCookie    = "UUID"
+	accessTokenCookie  = "OAuth.AccessToken"
+	customerCookie     = "UUID"
+	refreshTokenCookie = "OAuth.RefreshToken"
+	tokensExpiryCookie = "OAuth.TokensExpiryTime"
 )
 
 // Session is a harvested Tesco browser session.
@@ -111,6 +119,56 @@ func (s *Session) Expired(skew time.Duration) bool {
 		return false
 	}
 	return time.Now().Add(skew).After(s.ExpiresAt)
+}
+
+// Renewable reports whether the session carries a refresh token that has not
+// yet lapsed. A session can be renewable long after its access token has
+// expired — that is the whole point of the refresh path.
+func (s *Session) Renewable() bool {
+	if s == nil || s.Cookies[refreshTokenCookie] == "" {
+		return false
+	}
+	if exp, ok := s.RefreshExpiry(); ok {
+		return time.Now().Before(exp)
+	}
+	// No stated window: assume redeemable and let Tesco be the judge, the same
+	// way an unparseable access-token expiry is treated as live.
+	return true
+}
+
+// RefreshExpiry reads when the refresh token dies, from the cookie in which
+// Tesco states it. Tesco has been issuing thirty-day refresh tokens against
+// sixty-minute access tokens, so this is the real ceiling on how long tescoctl
+// can go without a human.
+func (s *Session) RefreshExpiry() (time.Time, bool) {
+	if s == nil {
+		return time.Time{}, false
+	}
+	windows := tokenWindows(s.Cookies[tokensExpiryCookie])
+	when, ok := windows["RefreshToken"]
+	return when, ok
+}
+
+// tokenWindows decodes tokensExpiryCookie: a URL-encoded JSON object mapping
+// token names to epoch milliseconds. A malformed value yields nothing rather
+// than an error — it is a hint, and no decision depends on it alone.
+func tokenWindows(raw string) map[string]time.Time {
+	if raw == "" {
+		return nil
+	}
+	decoded, err := url.QueryUnescape(raw)
+	if err != nil {
+		return nil
+	}
+	var ms map[string]int64
+	if err := json.Unmarshal([]byte(decoded), &ms); err != nil {
+		return nil
+	}
+	out := make(map[string]time.Time, len(ms))
+	for name, epoch := range ms {
+		out[name] = time.UnixMilli(epoch)
+	}
+	return out
 }
 
 // jwtExpiry reads the exp claim from the access token. Tesco's access token is

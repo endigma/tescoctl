@@ -33,12 +33,12 @@ const (
 	CheckoutURL = "https://www.tesco.com/checkout/en-GB/groceries/order-summary?basketType=GROCERY"
 
 	// productURLPrefix is where a product lives on tesco.com. The path takes the
-	// TPNC, the same id every grosh command uses.
+	// TPNC, the same id every tescoctl command uses.
 	productURLPrefix = "https://www.tesco.com/groceries/en-GB/products/"
 )
 
 // ProductURL is the tesco.com page for a product, or "" for an empty tpnc.
-// It is the place to go for what grosh cannot do — catchweight pickers,
+// It is the place to go for what tescoctl cannot do — catchweight pickers,
 // substitutions, and checkout.
 func ProductURL(tpnc string) string {
 	if tpnc == "" {
